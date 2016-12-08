@@ -54,11 +54,11 @@ class P2pHelpApi {
 		let users = [];
 
 		userDescriptions.forEach((userDescription)=> {
-			if (userDescription.id.match(REGEX_OBJECTID)) {
+			if( userDescription.id && userDescription.id.match(REGEX_OBJECTID)) {
 				potentialIds.push(userDescription.id);
 			}
 
-			if (userDescription.email.search('@') !== -1) {
+			if (userDescription.email && userDescription.email.search('@') !== -1) {
 				potentialEmails.push(userDescription.email);
 			}
 		});
