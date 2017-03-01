@@ -8,7 +8,6 @@ Package.describe({
 
 
 Package.onUse(function (api) {
-	api.versionsFrom('1.2.1');
 	api.use(['ecmascript', 'underscore']);
 	api.use('templating', 'client'); //needed in order to be able to register global helpers on the Template-object
 
@@ -16,9 +15,6 @@ Package.onUse(function (api) {
 	api.addFiles('lib/duration.js', 'client');
 	api.addFiles('lib/testing.js', 'server');
 	api.addFiles('client/lib/globalTemplateHelpers.js', 'client');
-
-	api.addFiles('server/config.js', 'server');
-	api.addFiles('server/customHttpsCerts.js', 'server');
 
 	api.export('_dbs');
 });

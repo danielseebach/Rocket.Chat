@@ -6,7 +6,7 @@ currentTracker = undefined
 	Meteor.defer ->
 		currentTracker = Tracker.autorun (c) ->
 			if RoomManager.open(type + name).ready() isnt true
-				BlazeLayout.render 'main', {center: 'loading'}
+				BlazeLayout.render 'main', { modal: RocketChat.Layout.isEmbedded(), center: 'loading' }
 				return
 
 			user = Meteor.user()
@@ -21,17 +21,25 @@ currentTracker = undefined
 				if type is 'd'
 					Meteor.call 'createDirectMessage', name, (err) ->
 						if !err
+							RoomManager.close(type + name)
 							openRoom('d', name)
 						else
 							Session.set 'roomNotFound', {type: type, name: name}
 							BlazeLayout.render 'main', {center: 'roomNotFound'}
 							return
 				else
-					Session.set 'roomNotFound', {type: type, name: name}
-					BlazeLayout.render 'main', {center: 'roomNotFound'}
+					Meteor.call 'getRoomByTypeAndName', type, name, (err, record) ->
+						if err?
+							Session.set 'roomNotFound', {type: type, name: name}
+							BlazeLayout.render 'main', {center: 'roomNotFound'}
+						else
+							delete record.$loki
+							RocketChat.models.Rooms.upsert({ _id: record._id }, _.omit(record, '_id'))
+							RoomManager.close(type + name)
+							openRoom(type, name)
+
 				return
 
-			$('.rocket-loader').remove();
 			mainNode = document.querySelector('.main-content')
 			if mainNode?
 				for child in mainNode.children
@@ -41,12 +49,9 @@ currentTracker = undefined
 				if roomDom.classList.contains('room-container')
 					roomDom.querySelector('.messages-box > .wrapper').scrollTop = roomDom.oldScrollTop
 
-#  RB: Disable input-field for closed livechat-rooms
-			if room.t == 'l' && !room.open
-				$('.input-message').attr('disabled', true)
-# /RB
-
 			Session.set 'openedRoom', room._id
+
+			fireGlobalEvent 'room-opened', _.omit room, 'usernames'
 
 			Session.set 'editRoomTitle', false
 			RoomManager.updateMentionsMarksOfRoom type + name
@@ -55,20 +60,17 @@ currentTracker = undefined
 			, 2000
 			# KonchatNotification.removeRoomNotification(params._id)
 
-			if Meteor.Device.isDesktop()
+			if Meteor.Device.isDesktop() and window.chatMessages?[room._id]?
 				setTimeout ->
 					$('.message-form .input-message').focus()
 				, 100
 
 			# update user's room subscription
-
-# RB: For closed rooms: Don't re-open it once the room is being displayed (e. g. from administration-view)
 			sub = ChatSubscription.findOne({rid: room._id})
 			if sub?.open is false
-				Meteor.call 'openRoom', room._id, room.open, (err) ->
+				Meteor.call 'openRoom', room._id, (err) ->
 					if err
 						return handleError(err)
-# /RB
 
 			if FlowRouter.getQueryParam('msg')
 				msg = { _id: FlowRouter.getQueryParam('msg'), rid: room._id }

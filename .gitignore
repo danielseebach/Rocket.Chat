@@ -2,6 +2,7 @@
 **/build/*
 **/node_modules/*
 **/tmp/*
+**/.meteor/dev_bundle
 /private/certs/*
 *.bak
 *.iml
@@ -38,12 +39,15 @@
 .metadata
 .meteor/local*
 .meteor/meteorite
+.meteor/dev_bundle
+packages/rocketchat-livechat/app/.meteor/dev_bundle
 .mule
 .pmd
 .project
 .sass-cache
 .settings
 .Spotlight-V100
+tatus
 .Trashes
 .wtpmodules
 \#*\#
@@ -68,3 +72,4 @@ ecosystem.json
 pm2.json
 settings.json
 build.sh
+/public/livechat

@@ -18,7 +18,6 @@ function addDirectory(api, pathInPackage, environment) {
 
 Package.onUse(function (api) {
 
-	api.versionsFrom('1.2.1');
 	api.use(['ecmascript', 'underscore']);
 	api.use('templating', 'client');
 	api.use('less@2.5.1');
@@ -36,12 +35,15 @@ Package.onUse(function (api) {
 	addDirectory(api,'client/views/app/tabbar', 'client');
 
 	//i18n
-	var _ = Npm.require('underscore');
-	var fs = Npm.require('fs');
+	const _ = Npm.require('underscore');
+	const fs = Npm.require('fs');
 	var tapi18nFiles = _.compact(_.map(fs.readdirSync('packages/reisebuddy-redlink/i18n'), function(filename) {
-		return 'i18n/' + filename;
+		if (fs.statSync('packages/reisebuddy-redlink/i18n/' + filename).size > 16) {
+			return 'i18n/' + filename;
+		}
 	}));
-	api.addFiles(tapi18nFiles);
-
-	api.use('tap:i18n');
+	api.use('tap:i18n@1.8.2', ['client', 'server']);
+	api.imply('tap:i18n');
+	api.addFiles(tapi18nFiles, ['client', 'server']);
+	console.log('Loaded tapi-files', JSON.stringify(tapi18nFiles, 2, ""));
 });

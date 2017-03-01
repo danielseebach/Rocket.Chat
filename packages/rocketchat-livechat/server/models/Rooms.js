@@ -18,7 +18,8 @@ RocketChat.models.Rooms.updateSurveyFeedbackById = function(_id, surveyFeedback)
 
 RocketChat.models.Rooms.updateLivechatDataByToken = function(token, key, value) {
 	const query = {
-		'v.token': token
+		'v.token': token,
+		open: true
 	};
 
 	const update = {
@@ -30,27 +31,33 @@ RocketChat.models.Rooms.updateLivechatDataByToken = function(token, key, value) 
 	return this.update(query, update);
 };
 
-RocketChat.models.Rooms.findLivechat = function(offset = 0, limit = 20) {
-	const query = {
+RocketChat.models.Rooms.findLivechat = function(filter = {}, offset = 0, limit = 20) {
+	const query = _.extend(filter, {
 		t: 'l'
-	};
+	});
 
 	return this.find(query, { sort: { ts: - 1 }, offset: offset, limit: limit });
 };
 
 RocketChat.models.Rooms.findLivechatByCode = function(code, fields) {
-	const query = {
-		t: 'l',
-		code: parseInt(code)
-	};
+	code = parseInt(code);
 
-	let options = {};
+	const options = {};
 
 	if (fields) {
 		options.fields = fields;
 	}
 
-	return this.find(query, options);
+	// if (this.useCache) {
+	// 	return this.cache.findByIndex('t,code', ['l', code], options).fetch();
+	// }
+
+	const query = {
+		t: 'l',
+		code: code
+	};
+
+	return this.findOne(query, options);
 };
 
 /**
@@ -73,7 +80,7 @@ RocketChat.models.Rooms.getNextLivechatRoomCode = function() {
 
 	const livechatCount = findAndModify(query, null, update);
 
-	return livechatCount.value;
+	return livechatCount.value.value;
 };
 
 RocketChat.models.Rooms.findOpenByVisitorToken = function(visitorToken, options) {
@@ -99,6 +106,15 @@ RocketChat.models.Rooms.findByVisitorId = function(visitorId) {
 	};
 
 	return this.find(query);
+};
+
+RocketChat.models.Rooms.findOneOpenByVisitorId = function(visitorId) {
+	const query = {
+		open: true,
+		'v._id': visitorId
+	};
+
+	return this.findOne(query);
 };
 
 RocketChat.models.Rooms.setResponseByRoomId = function(roomId, response) {
@@ -129,14 +145,11 @@ RocketChat.models.Rooms.closeByRoomId = function(roomId, closeInfo) {
 				username: closeInfo.user.username
 			},
 			closedAt: closeInfo.closedAt,
-			chatDuration: closeInfo.chatDuration,
-			// RB: Classify room as closed (instead of "undefined" in the Rocket.Chat default implementation) (needed for correct displaying)
-			open: false
-			// RB
+			chatDuration: closeInfo.chatDuration
+		},
+		$unset: {
+			open: 1
 		}
-// RB: Classify room as closed (instead of "undefined" in the Rocket.Chat default implementation)
-// 		in order to allow to copy this information (e. g. when displaying a livechat-room)
-// RB
 	});
 };
 
@@ -153,13 +166,12 @@ RocketChat.models.Rooms.findOpenByAgent = function(userId) {
 	return this.find(query);
 };
 
-RocketChat.models.Rooms.changeAgentByRoomId = function(roomId, newUsernames, newAgent) {
+RocketChat.models.Rooms.changeAgentByRoomId = function(roomId, newAgent) {
 	const query = {
 		_id: roomId
 	};
 	const update = {
 		$set: {
-			usernames: newUsernames,
 			servedBy: {
 				_id: newAgent.agentId,
 				username: newAgent.username
@@ -168,4 +180,17 @@ RocketChat.models.Rooms.changeAgentByRoomId = function(roomId, newUsernames, new
 	};
 
 	this.update(query, update);
+};
+
+RocketChat.models.Rooms.saveCRMDataByRoomId = function(roomId, crmData) {
+	const query = {
+		_id: roomId
+	};
+	const update = {
+		$set: {
+			crmData
+		}
+	};
+
+	return this.update(query, update);
 };

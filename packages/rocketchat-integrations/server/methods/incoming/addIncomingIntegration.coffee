@@ -23,14 +23,14 @@ Meteor.methods
 
 		if integration.scriptEnabled is true and integration.script? and integration.script.trim() isnt ''
 			try
-				babelOptions = Babel.getDefaultOptions()
-				babelOptions.externalHelpers = false
+				babelOptions = Babel.getDefaultOptions({ runtime: false })
+				babelOptions = _.extend(babelOptions, { compact: true, minified: true, comments: false })
 
 				integration.scriptCompiled = Babel.compile(integration.script, babelOptions).code
 				integration.scriptError = undefined
 			catch e
 				integration.scriptCompiled = undefined
-				integration.scriptError = _.pick e, 'name', 'message', 'pos', 'loc', 'codeFrame'
+				integration.scriptError = _.pick e, 'name', 'message', 'stack'
 
 		for channel in channels
 			record = undefined
@@ -69,6 +69,7 @@ Meteor.methods
 
 		integration.type = 'webhook-incoming'
 		integration.token = token
+		integration.channel = channels
 		integration.userId = user._id
 		integration._createdAt = new Date
 		integration._createdBy = RocketChat.models.Users.findOne @userId, {fields: {username: 1}}

@@ -1,3 +1,5 @@
+import moment from 'moment';
+
 Template.visitorNavigation.helpers({
 	loadingNavigation() {
 		return !Template.instance().pageVisited.ready();
@@ -5,10 +7,10 @@ Template.visitorNavigation.helpers({
 
 	pageVisited() {
 		const room = ChatRoom.findOne({ _id: this.rid }, { fields: { 'v.token': 1 } });
+
 		if (room && room.v && room.v.token) {
-		return LivechatPageVisited.find({ token: room.v.token }, { sort: { ts: -1 } });
+			return LivechatPageVisited.find({ token: room.v.token }, { sort: { ts: -1 } });
 		}
-		return [];
 	},
 
 	pageTitle() {

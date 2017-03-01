@@ -1,10 +1,16 @@
 class RedlinkAdapter {
 	constructor(adapterProps) {
 		this.properties = adapterProps;
-		this.headers = {};
-		this.headers['content-Type'] = 'application/json; charset=utf-8';
+		this.properties.url = this.properties.url.toLowerCase();
+
+		this.options = {};
+		this.options.headers={};
+		this.options.headers['content-Type'] = 'application/json; charset=utf-8';
 		if (this.properties.token) {
-			this.headers['authorization'] = 'basic ' + this.properties.token;
+			this.options.headers['authorization'] = 'basic ' + this.properties.token;
+		}
+		if(this.properties.url.substring(0, 4) === 'https'){
+			this.options.cert = '~/.nodeCaCerts/' + this.properties.url.replace('https', '');
 		}
 	}
 
@@ -39,7 +45,6 @@ class RedlinkAdapter {
 		RocketChat.models.Messages.find({
 			rid: rid,
 			_hidden: {$ne: true},
-			msg: {$ne: ""},
 			ts: {$gt: new Date(analyzedUntil)}
 		}).forEach(visibleMessage => {
 			conversation.push({
@@ -54,10 +59,9 @@ class RedlinkAdapter {
 	onResultModified(modifiedRedlinkResult) {
 		try {
 			SystemLogger.debug("sending update to redlinkk with: " + JSON.stringify(modifiedRedlinkResult));
-			const responseRedlinkQuery = HTTP.post(this.properties.url + '/query', {
-				data: modifiedRedlinkResult.result,
-				headers: this.headers
-			});
+			let options = this.options;
+			options.data = modifiedRedlinkResult.result;
+			const responseRedlinkQuery = HTTP.post(this.properties.url + '/query', options);
 			SystemLogger.debug("recieved update to redlinkk with: " + JSON.stringify(responseRedlinkQuery));
 			RocketChat.models.LivechatExternalMessage.update(
 				{
@@ -77,34 +81,55 @@ class RedlinkAdapter {
 		}
 	}
 
-	onMessage(message) {
+	onMessage(message, context = {}) {
+
+		//private methods
+		/** This method adapts the service response.
+		 * It is intended to make it easier for the consumer to digest the results provided by the AI
+		 * @param prepareResponse
+		 * @returns prepareResponse
+		 * @private
+		 */
+		const _postprocessPrepare = function(prepareResponse){
+			return prepareResponse;
+		};
+
+
 		const knowledgeProviderResultCursor = this.getKnowledgeProviderCursor(message.rid);
 		const latestKnowledgeProviderResult = knowledgeProviderResultCursor.fetch()[0];
 
 		const requestBody = this.createRedlinkStub(message.rid, latestKnowledgeProviderResult);
 		requestBody.messages = this.getConversation(message.rid, latestKnowledgeProviderResult);
 
+		requestBody.context = context;
+
 		try {
-			const responseRedlinkPrepare = HTTP.post(this.properties.url + '/prepare', {
-				data: requestBody,
-				headers: this.headers
-			});
+			let options = this.options;
+			this.options.data = requestBody;
+
+			if(RocketChat.settings.get('Livechat_Knowledge_Redlink_Domain')){
+				options.data.context.domain = RocketChat.settings.get('Livechat_Knowledge_Redlink_Domain');
+			}
+			const responseRedlinkPrepare = HTTP.post(this.properties.url + '/prepare', options);
 
 			if (responseRedlinkPrepare.data && responseRedlinkPrepare.statusCode === 200) {
 
 				this.purgePreviousResults(knowledgeProviderResultCursor);
 
-				RocketChat.models.LivechatExternalMessage.insert({
+				const externalMessageId = RocketChat.models.LivechatExternalMessage.insert({
 					rid: message.rid,
 					knowledgeProvider: "redlink",
 					originMessage: {_id: message._id, ts: message.ts},
-					result: responseRedlinkPrepare.data,
+					result: _postprocessPrepare(responseRedlinkPrepare.data),
 					ts: new Date()
 				});
+
+				const externalMessage = RocketChat.models.LivechatExternalMessage.findOneById(externalMessageId);
+
+				Meteor.defer(() => RocketChat.callbacks.run('afterExternalMessage', externalMessage));
 			}
 		} catch (e) {
-			SystemLogger.error('Redlink-Prepare/Query with results from prepare did not succeed -> ', e);
-			SystemLogger.warn("RequestBody: " + JSON.stringify(requestBody));
+			console.error('Redlink-Prepare/Query with results from prepare did not succeed -> ', e);
 		}
 	}
 
@@ -115,10 +140,26 @@ class RedlinkAdapter {
 		};
 
 		const _getBufferedResults = function (latestKnowledgeProviderResult, templateIndex, creator) {
+
 			if (latestKnowledgeProviderResult && latestKnowledgeProviderResult.knowledgeProvider === 'redlink' && latestKnowledgeProviderResult.inlineResults) {
 				return latestKnowledgeProviderResult.inlineResults[_getKeyForBuffer(templateIndex, creator)];
 			}
 		};
+
+		/**
+		 * We might have modified a prepare resonse earlier.
+		 * If we want to revert this adaptation
+		 * @param queryTemplates
+		 * @private
+		 */
+		const _preprocessTemplates = function(queryTemplates){
+			return queryTemplates;
+		};
+
+		const _postprocessResultResponse = function(results){
+			return results;
+		};
+
 		// ---------------- private methods
 
 		var results = [];
@@ -133,18 +174,54 @@ class RedlinkAdapter {
 
 		if (!results) {
 			try {
-				const request = {
-					data: {
-						messages: latestKnowledgeProviderResult.result.messages,
-						tokens: latestKnowledgeProviderResult.result.tokens,
-						queryTemplates: latestKnowledgeProviderResult.result.queryTemplates
-					},
-					headers: this.headers
-				};
 
-				const responseRedlinkResult = HTTP.post(this.properties.url + '/result/' + creator + '/?templateIdx=' + templateIndex, request);
+				let options = this.options;
+				this.options.data = this.options;
+
+				options.data = {
+						messages: latestKnowledgeProviderResult.result.messagescl,
+						tokens: latestKnowledgeProviderResult.result.tokens,
+						queryTemplates: _preprocessTemplates(latestKnowledgeProviderResult.result.queryTemplates),
+						context: latestKnowledgeProviderResult.result.context
+					};
+
+
+				if(RocketChat.settings.get('Livechat_Knowledge_Redlink_Domain')){
+					options.data.context.domain = RocketChat.settings.get('Livechat_Knowledge_Redlink_Domain');
+				}
+				const responseRedlinkResult = HTTP.post(this.properties.url + '/result/' + creator + '/?templateIdx=' + templateIndex, options);
 				if (responseRedlinkResult.data && responseRedlinkResult.statusCode === 200) {
 					results = responseRedlinkResult.data;
+
+					if (creator === 'conversation') {
+						results.forEach(function (result)						{
+							// Some dirty string operations to convert the snippet to javascript objects
+							let transformedSnippet = JSON.stringify(result.snippet);
+							transformedSnippet = transformedSnippet.slice(1, transformedSnippet.length - 1); //remove quotes in the beginning and at the end
+
+							if (transformedSnippet) {
+								transformedSnippet = '[' + transformedSnippet;
+								transformedSnippet = transformedSnippet.replace(/\\n/g, '');
+								transformedSnippet = transformedSnippet.replace(/<div class=\\"message seeker\\">/g, '{"origin": "seeker", "text": "');
+								transformedSnippet = transformedSnippet.replace(/<div class=\\"message provider\\">/g, '{"origin": "provider", "text": "');
+								transformedSnippet = transformedSnippet.replace(/<\/div>/g, '"},');
+								transformedSnippet = transformedSnippet.trim();
+								if (transformedSnippet.endsWith(',')) {
+									transformedSnippet = transformedSnippet.slice(0, transformedSnippet.length - 1);
+								}
+								transformedSnippet = transformedSnippet + ']';
+							}
+							try {
+								const messages = JSON.parse(transformedSnippet);
+								result.messages = messages;
+							} catch(err){
+								console.error('Error parsing conversation',err)
+								}
+						});
+						results.reduce((result)=>!!result.messages);
+					}
+
+					results = _postprocessResultResponse(results);
 
 					//buffer the results
 					let inlineResultsMap = latestKnowledgeProviderResult.inlineResults || {};
@@ -181,6 +258,12 @@ class RedlinkAdapter {
 		return RocketChat.models.LivechatExternalMessage.findByRoomId(roomId, {ts: -1});
 	}
 
+	getStoredConversation(conversationId){
+		let options = this.options;
+
+		const conversation = HTTP.get(this.properties.url + '/store/' + conversationId, options);
+	}
+
 	onClose(room) { //async
 
 		const knowledgeProviderResultCursor = this.getKnowledgeProviderCursor(room._id);
@@ -188,12 +271,13 @@ class RedlinkAdapter {
 		if (latestKnowledgeProviderResult) {
 			latestKnowledgeProviderResult.helpful = room.rbInfo.knowledgeProviderUsage;
 
-			HTTP.post(this.properties.url + '/store', {
-				data: {
-					latestKnowledgeProviderResult
-				},
-				headers: this.headers
-			});
+			let options = this.options;
+			this.options.data = latestKnowledgeProviderResult;
+
+			if(RocketChat.settings.get('Livechat_Knowledge_Redlink_Domain')){
+				options.data.context.domain = RocketChat.settings.get('Livechat_Knowledge_Redlink_Domain');
+			}
+			HTTP.post(this.properties.url + '/store', options);
 		}
 	}
 }

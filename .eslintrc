@@ -1,4 +1,8 @@
 {
+	"parserOptions": {
+		"sourceType": "module",
+		"ecmaVersion": 2017
+	},
 	"env": {
 		"browser": true,
 		"commonjs": true,
@@ -46,7 +50,7 @@
 		}],
 		"no-lonely-if": 2,
 		"no-trailing-spaces": 2,
-		"complexity": [1, 11],
+		"complexity": [1, 31],
 		"space-in-parens": [2, "never"],
 		"space-before-function-paren": [2, "never"],
 		"space-before-blocks": [2, "always"],
@@ -63,12 +67,15 @@
 		"block-scoped-var": 2,
 		"curly": [2, "all"],
 		"eqeqeq": [2, "allow-null"],
-		"new-cap": 2,
+		"new-cap":  [2, {
+			"capIsNewExceptions": ["Match.Optional", "Match.Maybe", "Match.ObjectIncluding", "Push.Configure"]
+		}],
 		"use-isnan": 2,
 		"valid-typeof": 2,
 		"linebreak-style": [2, "unix"],
 		"quotes": [2, "single"],
-		"semi": [2, "always"]
+		"semi": [2, "always"],
+		"prefer-const": 2
 	},
 	"globals": {
 		"_"                           : false,
@@ -79,6 +86,7 @@
 		"Assets"                      : false,
 		"Blaze"                       : false,
 		"BlazeLayout"                 : false,
+		"browser"                     : false,
 		"ChatMessage"                 : false,
 		"ChatMessages"                : false,
 		"ChatRoom"                    : false,
@@ -86,6 +94,7 @@
 		"check"                       : false,
 		"CryptoJS"                    : false,
 		"Department"                  : false,
+		"DDPRateLimiter"              : false,
 		"EJSON"                       : false,
 		"Email"                       : false,
 		"FlowRouter"                  : false,
@@ -114,6 +123,7 @@
 		"RocketChatFile"              : false,
 		"RocketChatFileAvatarInstance": false,
 		"RoomHistoryManager"          : false,
+		"RoomManager"                 : false,
 		"s"                           : false,
 		"ServiceConfiguration"        : false,
 		"Session"                     : false,
@@ -123,6 +133,7 @@
 		"swal"                        : false,
 		"t"                           : false,
 		"TAPi18n"                     : false,
+		"TAPi18next"                  : false,
 		"Template"                    : false,
 		"TimeSync"                    : false,
 		"toastr"                      : false,
